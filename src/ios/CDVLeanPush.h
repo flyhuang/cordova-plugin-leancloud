@@ -2,6 +2,7 @@
 
 #define PROP_KEY_LEANCLOUD_APP_ID @"leancloud-appid"
 #define PROP_KEY_LEANCLOUD_APP_KEY @"leancloud-appkey"
+#define PROP_KEY_LEANCLOUD_PUSH_CERTIFICATE @"leancloud-push-certificate"
 
 @interface CDVLeanPush:CDVPlugin
 

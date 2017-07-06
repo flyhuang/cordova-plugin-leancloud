@@ -96,7 +96,7 @@ void swizzleMethod(Class c, SEL originalSelector)
         }
     }
     NSDictionary *localNotif = [launchOptions objectForKey:@"UIApplicationLaunchOptionsRemoteNotificationKey"];
-    
+
     if (localNotif)
     {
         CDVLeanPush *pushHandler = [self.viewController getCommandInstance:@"LeanPush"];
@@ -136,6 +136,10 @@ void swizzleMethod(Class c, SEL originalSelector)
     [currentInstallation setDeviceTokenFromData:deviceToken];
     [currentInstallation setBadge:0];
     [currentInstallation saveInBackground];
+    NSString *certificateName = [self.viewController.settings objectForKey:PROP_KEY_LEANCLOUD_PUSH_CERTIFICATE];
+    if (certificateName) {
+        [currentInstallation setDeviceProfile:certificateName];
+    }
 }
 
 - (void)noop_application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken
