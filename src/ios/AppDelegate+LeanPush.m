@@ -2,6 +2,7 @@
 #import "CDVLeanPush.h"
 #import <AVOSCloud/AVOSCloud.h>
 #import <objc/runtime.h>
+#import <UserNotifications/UserNotifications.h>
 
 @implementation AppDelegate (CDVLean)
 
@@ -57,44 +58,25 @@ void swizzleMethod(Class c, SEL originalSelector)
     BOOL ret = [self swizzled_application:application didFinishLaunchingWithOptions:launchOptions];
 
     if (ret) {
-        // 1. Initialize LeanCloud
-        // 2. Send analysis info
-        // 3. Register remote notification
-        NSString *appId = [self.viewController.settings objectForKey:PROP_KEY_LEANCLOUD_APP_ID];
-        NSString *appKey = [self.viewController.settings objectForKey:PROP_KEY_LEANCLOUD_APP_KEY];
-        if (appId && appKey) {
-            // init
-            [AVOSCloud setApplicationId:appId clientKey:appKey];
-
-            // analysis
-            if (application.applicationState != UIApplicationStateBackground) {
-                // Track an app open here if we launch with a push, unless
-                // "content_available" was used to trigger a background push (introduced
-                // in iOS 7). In that case, we skip tracking here to avoid double
-                // counting the app-open.
-                BOOL preBackgroundPush = ![application respondsToSelector:@selector(backgroundRefreshStatus)];
-                BOOL oldPushHandlerOnly = ![self respondsToSelector:@selector(application:didReceiveRemoteNotification:fetchCompletionHandler:)];
-                BOOL noPushPayload = ![launchOptions objectForKey:UIApplicationLaunchOptionsRemoteNotificationKey];
-                if (preBackgroundPush || oldPushHandlerOnly || noPushPayload) {
-                    [AVAnalytics trackAppOpenedWithLaunchOptions:launchOptions];
-                }
+        // 注册APNS
+        [self registerForRemoteNotification];
+        // 初始化leancloud
+        [self initLeanCloud];
+        // analysis
+        if (application.applicationState != UIApplicationStateBackground) {
+            // Track an app open here if we launch with a push, unless
+            // "content_available" was used to trigger a background push (introduced
+            // in iOS 7). In that case, we skip tracking here to avoid double
+            // counting the app-open.
+            BOOL preBackgroundPush = ![application respondsToSelector:@selector(backgroundRefreshStatus)];
+            BOOL oldPushHandlerOnly = ![self respondsToSelector:@selector(application:didReceiveRemoteNotification:fetchCompletionHandler:)];
+            BOOL noPushPayload = ![launchOptions objectForKey:UIApplicationLaunchOptionsRemoteNotificationKey];
+            if (preBackgroundPush || oldPushHandlerOnly || noPushPayload) {
+                [AVAnalytics trackAppOpenedWithLaunchOptions:launchOptions];
             }
-
-            // register remote notification
-            if ([application respondsToSelector:@selector(isRegisteredForRemoteNotifications)]==NO) {
-                [application registerForRemoteNotificationTypes:
-                                UIRemoteNotificationTypeBadge |
-                                UIRemoteNotificationTypeAlert |
-                                UIRemoteNotificationTypeSound];
-            } else {
-                UIUserNotificationSettings *settings = [UIUserNotificationSettings settingsForTypes:UIUserNotificationTypeAlert | UIUserNotificationTypeBadge | UIUserNotificationTypeSound categories:nil];
-                [application registerUserNotificationSettings:settings];
-                [application registerForRemoteNotifications];
-            }
-        } else {
-            NSLog(@"LeanCloud app ID/key not specified");
         }
     }
+
     NSDictionary *localNotif = [launchOptions objectForKey:@"UIApplicationLaunchOptionsRemoteNotificationKey"];
 
     if (localNotif)
@@ -104,6 +86,69 @@ void swizzleMethod(Class c, SEL originalSelector)
     }
 
     return ret;
+}
+
+- (void) initLeanCloud {
+    NSString *appId = [self.viewController.settings objectForKey:PROP_KEY_LEANCLOUD_APP_ID];
+    NSString *appKey = [self.viewController.settings objectForKey:PROP_KEY_LEANCLOUD_APP_KEY];
+    if (appId && appKey) {
+        [AVOSCloud setApplicationId:appId clientKey:appKey];
+    } else {
+        NSLog(@"LeanCloud app ID/key not specified");
+    }
+}
+
+/**
+ * 初始化UNUserNotificationCenter
+ */
+- (void)registerForRemoteNotification {
+    // iOS10 兼容
+    if ([[UIDevice currentDevice].systemVersion floatValue] >= 10.0) {
+        // 使用 UNUserNotificationCenter 来管理通知
+        UNUserNotificationCenter *uncenter = [UNUserNotificationCenter currentNotificationCenter];
+        // 监听回调事件
+        [uncenter setDelegate:self];
+        //iOS10 使用以下方法注册，才能得到授权
+        [uncenter requestAuthorizationWithOptions:(UNAuthorizationOptionAlert+UNAuthorizationOptionBadge+UNAuthorizationOptionSound)
+                                completionHandler:^(BOOL granted, NSError * _Nullable error) {
+                                    [[UIApplication sharedApplication] registerForRemoteNotifications];
+                                    //TODO:授权状态改变
+                                    NSLog(@"%@" , granted ? @"授权成功" : @"授权失败");
+                                }];
+        // 获取当前的通知授权状态, UNNotificationSettings
+        [uncenter getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings * _Nonnull settings) {
+            NSLog(@"%s\nline:%@\n-----\n%@\n\n", __func__, @(__LINE__), settings);
+            /*
+             UNAuthorizationStatusNotDetermined : 没有做出选择
+             UNAuthorizationStatusDenied : 用户未授权
+             UNAuthorizationStatusAuthorized ：用户已授权
+             */
+            if (settings.authorizationStatus == UNAuthorizationStatusNotDetermined) {
+                NSLog(@"未选择");
+            } else if (settings.authorizationStatus == UNAuthorizationStatusDenied) {
+                NSLog(@"未授权");
+            } else if (settings.authorizationStatus == UNAuthorizationStatusAuthorized) {
+                NSLog(@"已授权");
+            }
+        }];
+    }
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    if ([[UIDevice currentDevice].systemVersion floatValue] >= 8.0) {
+        UIUserNotificationType types = UIUserNotificationTypeAlert |
+        UIUserNotificationTypeBadge |
+        UIUserNotificationTypeSound;
+        UIUserNotificationSettings *settings = [UIUserNotificationSettings settingsForTypes:types categories:nil];
+
+        [[UIApplication sharedApplication] registerUserNotificationSettings:settings];
+        [[UIApplication sharedApplication] registerForRemoteNotifications];
+    } else {
+        UIRemoteNotificationType types = UIRemoteNotificationTypeBadge |
+        UIRemoteNotificationTypeAlert |
+        UIRemoteNotificationTypeSound;
+        [[UIApplication sharedApplication] registerForRemoteNotificationTypes:types];
+    }
+    #pragma clang diagnostic pop
 }
 
 - (BOOL)noop_application:(UIApplication*)application didFinishLaunchingWithOptions:(NSDictionary*)launchOptions

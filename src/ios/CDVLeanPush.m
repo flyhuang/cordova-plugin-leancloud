@@ -8,9 +8,9 @@
 {
     CDVPluginResult* pluginResult = nil;
     NSString* channel = [command.arguments objectAtIndex:0];
-    
+
     NSLog(@"CDVLeanPush subscribe %@", channel);
-    
+
     if (channel != nil && [channel length] > 0) {
         AVInstallation *currentInstallation = [AVInstallation currentInstallation];
         [currentInstallation addUniqueObject:channel forKey:@"channels"];
@@ -19,7 +19,7 @@
     } else {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR];
     }
-    
+
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
@@ -27,9 +27,9 @@
 {
     CDVPluginResult* pluginResult = nil;
     NSString* channel = [command.arguments objectAtIndex:0];
-    
+
     NSLog(@"CDVLeanPush unsubscribe %@", channel);
-    
+
     if (channel != nil && [channel length] > 0) {
         AVInstallation *currentInstallation = [AVInstallation currentInstallation];
         [currentInstallation removeObject:channel forKey:@"channels"];
@@ -38,21 +38,21 @@
     } else {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR];
     }
-    
+
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void)clearSubscription:(CDVInvokedUrlCommand *)command
 {
     CDVPluginResult* pluginResult = nil;
-    
+
     NSLog(@"CDVLeanPush clearSubscription");
-    
+
     AVInstallation *currentInstallation = [AVInstallation currentInstallation];
     [currentInstallation setObject:[[NSArray alloc] init] forKey:@"channels"];
     [currentInstallation saveInBackground];
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-    
+
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
@@ -60,9 +60,9 @@
 - (void)getInstallation:(CDVInvokedUrlCommand *)command
 {
     CDVPluginResult* pluginResult = nil;
-    
+
     NSLog(@"CDVLeanPush getInstallation");
-    
+
     AVInstallation *currentInstallation = [AVInstallation currentInstallation];
     if(currentInstallation != nil && currentInstallation.deviceToken != nil) {
         NSLog(@"device token: %@", currentInstallation.deviceToken);
@@ -71,7 +71,7 @@
     } else {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Fail to get Installation."];
     }
-    
+
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
@@ -93,7 +93,7 @@
     if (jsonString == nil) {
         return nil;
     }
-    
+
     NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
     NSError *err;
     NSDictionary *dic = [NSJSONSerialization JSONObjectWithData:jsonData
@@ -113,7 +113,7 @@
  *  @return <#return value description#>
  */
 +(NSString *)dictToJsonStr:(NSDictionary *)dict{
-    
+
     NSString *jsonString = nil;
     if ([NSJSONSerialization isValidJSONObject:dict])
     {
@@ -153,21 +153,22 @@
             [responseDictonary setValue:value forKey:key];
         }
     }
-    
+
     NSString *responseString = [CDVLeanPush dictToJsonStr:responseDictonary];
-    
+
     NSLog(@"responseString:%@",responseString);
-    
-    
+
+
     if (self.callback) {
         NSString * jsCallBack = [NSString stringWithFormat:@"%@(%@,'%@');", self.callback,responseString,status];
-        
+
+        #warning 测试在IOS10下, app程序正在运行, 点击通知. 会导致程序crash 暂时注释掉向JS回调的方法
         if ([self.webView respondsToSelector:@selector(stringByEvaluatingJavaScriptFromString:)]) {
             // Cordova-iOS pre-4
-            [self.webView performSelectorOnMainThread:@selector(stringByEvaluatingJavaScriptFromString:) withObject:jsCallBack waitUntilDone:NO];
+            //[self.webView performSelectorOnMainThread:@selector(stringByEvaluatingJavaScriptFromString:) withObject:jsCallBack waitUntilDone:NO];
         } else {
             // Cordova-iOS 4+
-            [self.webView performSelectorOnMainThread:@selector(evaluateJavaScript:completionHandler:) withObject:jsCallBack waitUntilDone:NO];
+            //[self.webView performSelectorOnMainThread:@selector(evaluateJavaScript:completionHandler:) withObject:jsCallBack waitUntilDone:NO];
         }
     }else{
         self.cacheResult = responseString;
@@ -177,11 +178,11 @@
 - (void) getCacheResult:(CDVInvokedUrlCommand *)command
 {
     CDVPluginResult* pluginResult = nil;
-    
+
     NSLog(@"CDVLeanPush getCacheResult = %@", self.cacheResult);
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:self.cacheResult];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
     self.cacheResult = NULL;
-    
+
 }
 @end
